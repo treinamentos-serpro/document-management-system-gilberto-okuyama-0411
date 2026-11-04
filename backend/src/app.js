@@ -1,7 +1,6 @@
-// Seed do servidor backend do Document Management System.
+// Servidor backend do Document Management System.
 //
-// Este arquivo é apenas um ponto de partida mínimo. Ao longo do workshop você
-// vai usar o Agent Mode do GitHub Copilot para construir as camadas:
+// Camadas (Clean Architecture simples):
 //   - routes/       (definição das rotas)
 //   - controllers/  (entrada HTTP e validação)
 //   - services/     (regras de negócio)
@@ -9,19 +8,24 @@
 //
 // Restrição do projeto: uploads são gravados no filesystem local da aplicação
 // usando multer com diskStorage. Não utilize provedores externos.
+// Os metadados ficam em memória: são perdidos ao reiniciar o processo.
 
 const express = require('express');
+const config = require('./config');
+const documentRoutes = require('./routes/documentRoutes');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = config.port;
 
 app.use(express.json());
 
-// Endpoint de verificação de saúde. As demais rotas (/upload, /documents,
-// /documents/:id/download) serão implementadas durante o Passo 2.
+// Endpoint de verificação de saúde (não depende de identidade).
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
+
+// Rotas de documentos: /upload, /documents e /documents/:id/download.
+app.use(documentRoutes);
 
 if (require.main === module) {
   app.listen(PORT, () => {
