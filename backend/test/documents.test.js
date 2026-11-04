@@ -78,6 +78,20 @@ test('GET /documents lista somente documentos do usuário, em ordem decrescente'
   assert.ok(documents[0].uploadedAt >= documents[1].uploadedAt);
 });
 
+test('documento enviado aparece na listagem com os mesmos metadados', async () => {
+  const uploaded = await (await uploadFile({ name: 'listado.txt', user: 'user-f' })).json();
+
+  const res = await fetch(`${baseUrl}/documents`, {
+    headers: { 'x-user-id': 'user-f' },
+  });
+  assert.strictEqual(res.status, 200);
+
+  const documents = await res.json();
+  const found = documents.find((doc) => doc.id === uploaded.id);
+  assert.ok(found, 'o documento enviado deve constar na listagem');
+  assert.deepStrictEqual(found, uploaded);
+});
+
 test('GET /documents sem documentos retorna []', async () => {
   const res = await fetch(`${baseUrl}/documents`, {
     headers: { 'x-user-id': 'user-sem-docs' },
