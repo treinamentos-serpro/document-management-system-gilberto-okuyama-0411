@@ -11,18 +11,16 @@ function toPublicMetadata(document) {
   return publicMetadata;
 }
 
-async function registerUpload({ owner, file }) {
-  if (!file) {
-    throw new AppError('FILE_REQUIRED', 'Envie um arquivo no campo "file".');
-  }
-
+// Valida o conteúdo do arquivo já gravado pelo multer.
+function assertValidFile(file) {
   if (!file.size) {
-    // Arquivo vazio: remove a gravação para não registrar documento inválido.
-    await repository.removeFile(file.filename);
     throw new AppError('INVALID_FILE', 'O arquivo enviado está vazio.');
   }
+}
 
-  const document = {
+// Monta os metadados do documento a partir do arquivo recebido e do dono.
+function buildDocument({ owner, file }) {
+  return {
     id: crypto.randomUUID(),
     originalName: file.originalname,
     size: file.size,
@@ -30,33 +28,47 @@ async function registerUpload({ owner, file }) {
     owner,
     storageName: file.filename,
   };
-
-  try {
-    repository.save(document);
-  } catch (err) {
-    // Registro falhou após a gravação: remove o arquivo recém-gravado.
-    await repository.removeFile(file.filename);
-    throw err;
-  }
-
-  return toPublicMetadata(document);
 }
 
-function listByOwner(owner) {
-  return repository
-    .findByOwner(owner)
-    .map(toPublicMetadata)
-    .sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt));
-}
-
-function getDocumentForDownload(id, owner) {
+// Busca um documento garantindo que pertence ao dono informado.
+// Documento inexistente e documento de terceiro retornam o mesmo erro para
+// evitar enumeração de documentos alheios.
+function findOwnedDocument(id, owner) {
   const document = repository.findById(id);
-
-  // Documento inexistente e documento de terceiro retornam o mesmo erro para
-  // evitar enumeração de documentos alheios.
   if (!document || document.owner !== owner) {
     throw new AppError('DOCUMENT_NOT_FOUND', 'Documento não encontrado.');
   }
+  return document;
+}
+
+// Ordena por data de envio decrescente (mais recentes primeiro).
+function byNewestFirst(a, b) {
+  return b.uploadedAt.localeCompare(a.uploadedAt);
+}
+
+async function registerUpload({ owner, file }) {
+  if (!file) {
+    throw new AppError('FILE_REQUIRED', 'Envie um arquivo no campo "file".');
+  }
+
+  try {
+    assertValidFile(file);
+    const document = buildDocument({ owner, file });
+    repository.save(document);
+    return toPublicMetadata(document);
+  } catch (err) {
+    // Falha após a gravação física: remove o arquivo para não deixar órfão.
+    await repository.removeFile(file.filename);
+    throw err;
+  }
+}
+
+function listByOwner(owner) {
+  return repository.findByOwner(owner).map(toPublicMetadata).sort(byNewestFirst);
+}
+
+function getDocumentForDownload(id, owner) {
+  const document = findOwnedDocument(id, owner);
 
   return {
     document: toPublicMetadata(document),
